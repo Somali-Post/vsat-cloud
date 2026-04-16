@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>VSAT Decision Support</title>
+  <style>
+    :root {
+      --bg: #000000;
+      --panel: #0d0d0d;
+      --line: #262626;
+      --text: #ffffff;
+      --muted: #cfcfcf;
+      --button-bg: #ffffff;
+      --button-text: #000000;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      width: 100%;
+      min-height: 100%;
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Arial, Helvetica, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .app {
+      min-height: 100dvh;
+      display: grid;
+      grid-template-rows: 50dvh auto 1fr;
+      background: var(--bg);
+    }
+
+    .camera {
+      position: relative;
+      border-bottom: 1px solid var(--line);
+      background: #050505;
+      overflow: hidden;
+    }
+
+    #video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      background: #000000;
+    }
+
+    .camera-status {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      bottom: 12px;
+      font-size: 0.95rem;
+      color: var(--muted);
+      background: rgba(0, 0, 0, 0.7);
+      border: 1px solid #404040;
+      border-radius: 10px;
+      padding: 10px 12px;
+      text-align: center;
+    }
+
+    .controls {
+      padding: 12px;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel);
+    }
+
+    #analyzeBtn {
+      width: 100%;
+      min-height: 110px;
+      border: none;
+      border-radius: 16px;
+      background: var(--button-bg);
+      color: var(--button-text);
+      font-size: clamp(2rem, 9vw, 3.5rem);
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      touch-action: manipulation;
+      cursor: pointer;
+    }
+
+    #analyzeBtn:active {
+      transform: scale(0.99);
+    }
+
+    #analyzeBtn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .hud {
+      display: grid;
+      align-content: center;
+      gap: 22px;
+      padding: 18px 12px 28px;
+      text-align: center;
+    }
+
+    .hud-block {
+      display: grid;
+      gap: 8px;
+    }
+
+    .hud-label {
+      font-size: clamp(0.95rem, 3.8vw, 1.2rem);
+      letter-spacing: 0.14em;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .hud-value {
+      font-size: clamp(2.3rem, 12vw, 5.5rem);
+      line-height: 0.95;
+      font-weight: 900;
+      text-transform: uppercase;
+      color: var(--text);
+      word-break: break-word;
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="camera">
+      <video id="video" autoplay playsinline muted></video>
+      <div id="cameraStatus" class="camera-status">REQUESTING CAMERA...</div>
+    </section>
+
+    <section class="controls">
+      <button id="analyzeBtn" type="button" disabled>ANALYZE</button>
+    </section>
+
+    <section class="hud" aria-live="polite">
+      <div class="hud-block">
+        <div class="hud-label">ACTION</div>
+        <div id="action" class="hud-value">WAITING...</div>
+      </div>
+      <div class="hud-block">
+        <div class="hud-label">SIZE</div>
+        <div id="size" class="hud-value">WAITING...</div>
+      </div>
+    </section>
+
+    <canvas id="captureCanvas" hidden></canvas>
+  </main>
+
+  <script>
+    const video = document.getElementById("video");
+    const analyzeBtn = document.getElementById("analyzeBtn");
+    const actionEl = document.getElementById("action");
+    const sizeEl = document.getElementById("size");
+    const cameraStatusEl = document.getElementById("cameraStatus");
+    const captureCanvas = document.getElementById("captureCanvas");
+
+    let stream = null;
+
+    function setHud(actionText, sizeText) {
+      actionEl.textContent = actionText;
+      sizeEl.textContent = sizeText;
+    }
+
+    async function startCamera() {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        cameraStatusEl.textContent = "CAMERA API NOT SUPPORTED";
+        setHud("NETWORK ERROR", "NETWORK ERROR");
+        return;
+      }
+
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment" },
+          audio: false
+        });
+
+        video.srcObject = stream;
+        await video.play();
+        cameraStatusEl.textContent = "REAR CAMERA ACTIVE";
+        analyzeBtn.disabled = false;
+      } catch (error) {
+        console.error(error);
+        cameraStatusEl.textContent = "CAMERA ACCESS FAILED";
+        setHud("NETWORK ERROR", "NETWORK ERROR");
+      }
+    }
+
+    function captureFrameAsJpeg() {
+      return new Promise((resolve, reject) => {
+        const w = video.videoWidth;
+        const h = video.videoHeight;
+
+        if (!w || !h) {
+          reject(new Error("Video frame unavailable."));
+          return;
+        }
+
+        captureCanvas.width = w;
+        captureCanvas.height = h;
+
+        const ctx = captureCanvas.getContext("2d");
+        ctx.drawImage(video, 0, 0, w, h);
+
+        captureCanvas.toBlob((blob) => {
+          if (!blob) {
+            reject(new Error("JPEG conversion failed."));
+            return;
+          }
+          resolve(blob);
+        }, "image/jpeg", 0.9);
+      });
+    }
+
+    async function analyzeFrame() {
+      analyzeBtn.disabled = true;
+      setHud("ANALYZING...", "ANALYZING...");
+
+      try {
+        const imageBlob = await captureFrameAsJpeg();
+        const formData = new FormData();
+        formData.append("image", imageBlob, "frame.jpg");
+
+        const response = await fetch("/analyze", {
+          method: "POST",
+          body: formData
+        });
+
+        if (!response.ok) {
+          throw new Error("Server returned " + response.status);
+        }
+
+        const result = await response.json();
+        setHud(
+          String(result.action || "WAITING...").toUpperCase(),
+          String(result.size || "WAITING...").toUpperCase()
+        );
+      } catch (error) {
+        console.error(error);
+        setHud("NETWORK ERROR", "NETWORK ERROR");
+      } finally {
+        analyzeBtn.disabled = false;
+      }
+    }
+
+    analyzeBtn.addEventListener("click", analyzeFrame);
+
+    window.addEventListener("beforeunload", () => {
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop());
+      }
+    });
+
+    startCamera();
+  </script>
+</body>
+</html>
