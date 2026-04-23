@@ -5,7 +5,7 @@ from typing import Any
 
 import cv2
 import numpy as np
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
@@ -42,7 +42,7 @@ async def serve_index() -> FileResponse:
 
 
 @app.post("/analyze")
-async def analyze(image: UploadFile = File(...)) -> dict[str, Any]:
+async def analyze(image: UploadFile = File(...), game_type: str = Form("CASH")) -> dict[str, Any]:
     image_bytes = await image.read()
     if not image_bytes:
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
@@ -53,7 +53,7 @@ async def analyze(image: UploadFile = File(...)) -> dict[str, Any]:
         raise HTTPException(status_code=400, detail="Invalid image file.")
 
     state = extractor.process_frame(frame)
-    decision = calculate_raw_decision(state)
+    decision = calculate_raw_decision(state, game_type=game_type)
 
     final_action = str(decision.get("action", "Check"))
     normalized_size = humanizer.normalize_value(
@@ -61,4 +61,4 @@ async def analyze(image: UploadFile = File(...)) -> dict[str, Any]:
         is_postflop=bool(decision.get("is_postflop", False)),
     )
 
-    return {"action": final_action, "size": normalized_size}
+    return {"action": final_action, "size": normalized_size, "state": state}

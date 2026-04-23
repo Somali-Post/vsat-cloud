@@ -169,6 +169,13 @@ class DataExtractor:
         if not text:
             return metrics
 
+        def _to_num(raw: str) -> Optional[float]:
+            cleaned = raw.replace(",", "").strip()
+            try:
+                return float(cleaned)
+            except ValueError:
+                return None
+
         key_value_patterns = [
             re.compile(r"([A-Za-z][A-Za-z0-9 _-]{1,40})\s*[:=]\s*(-?\d+(?:\.\d+)?)"),
             re.compile(r"([A-Za-z][A-Za-z0-9 _-]{1,40})\s+(-?\d+(?:\.\d+)?)"),
@@ -182,12 +189,71 @@ class DataExtractor:
                 match = pattern.search(line)
                 if not match:
                     continue
-                key = self._canonical_metric_key(match.group(1))
+                raw_key = match.group(1).strip()
+                if re.search(r"\d", raw_key):
+                    continue
+                if re.search(r"(?:st|nd|rd|th)\s*(?:of|/)", raw_key, flags=re.IGNORECASE):
+                    continue
+
+                key = self._canonical_metric_key(raw_key)
                 try:
                     metrics[key] = float(match.group(2))
                 except ValueError:
                     pass
                 break
+
+        # Tournament placement pattern: "153rd of 250" or "153rd/250".
+        placement_match = re.search(
+            r"\b(\d{1,4})(?:st|nd|rd|th)\s*(?:of|/)\s*(\d{1,5})\b",
+            text,
+            flags=re.IGNORECASE,
+        )
+        if placement_match:
+            rank = _to_num(placement_match.group(1))
+            total_players = _to_num(placement_match.group(2))
+            if rank is not None:
+                metrics["TournamentRank"] = rank
+            if total_players is not None:
+                metrics["Players_Left"] = total_players
+                metrics["PlayersLeft"] = total_players
+
+        # Payout line pattern: "71st:$1.25" (position where payouts start / next pay jump).
+        payout_match = re.search(
+            r"\b(\d{1,4})(?:st|nd|rd|th)\s*[:\-]\s*\$?\s*([\d,]+(?:\.\d+)?)\b",
+            text,
+            flags=re.IGNORECASE,
+        )
+        if payout_match:
+            payout_position = _to_num(payout_match.group(1))
+            payout_amount = _to_num(payout_match.group(2))
+            if payout_position is not None:
+                metrics["Payout_Proximity"] = payout_position
+                metrics["PayoutProximity"] = payout_position
+            if payout_amount is not None:
+                metrics["NextPayout"] = payout_amount
+
+        # Average stack depth pattern: "Avg: 69 BB".
+        avg_bb_match = re.search(
+            r"\bavg(?:erage)?\s*[:\-]?\s*([\d,]+(?:\.\d+)?)\s*bb\b",
+            text,
+            flags=re.IGNORECASE,
+        )
+        if avg_bb_match:
+            avg_bb = _to_num(avg_bb_match.group(1))
+            if avg_bb is not None:
+                metrics["Avg_BB"] = avg_bb
+                metrics["AvgBB"] = avg_bb
+
+        # Incoming decision stake pattern: "Call 1 BB", "To Call: 2.5", "Raise 10".
+        current_stake_match = re.search(
+            r"\b(?:to\s*call|call|bet|raise|all[- ]?in)\s*[:\-]?\s*\$?\s*([\d,]+(?:\.\d+)?)\s*(?:bb|b|chips?)?\b",
+            text,
+            flags=re.IGNORECASE,
+        )
+        if current_stake_match:
+            current_stake = _to_num(current_stake_match.group(1))
+            if current_stake is not None:
+                metrics["CurrentStake"] = current_stake
 
         # Fallback: recover TotalValue if OCR text includes a recognizable phrase.
         if "TotalValue" not in metrics:

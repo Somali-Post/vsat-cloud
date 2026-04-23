@@ -7,12 +7,14 @@
   <style>
     :root {
       --bg: #000000;
-      --panel: #0d0d0d;
-      --line: #262626;
+      --panel: #111111;
+      --line: #2f2f2f;
       --text: #ffffff;
-      --muted: #cfcfcf;
-      --button-bg: #ffffff;
-      --button-text: #000000;
+      --muted: #bdbdbd;
+      --accent: #ffffff;
+      --active: #15c76f;
+      --danger: #ff4d4d;
+      --console: #070707;
     }
 
     * {
@@ -27,28 +29,30 @@
       padding: 0;
       background: var(--bg);
       color: var(--text);
-      font-family: Arial, Helvetica, sans-serif;
+      font-family: "Segoe UI", Arial, Helvetica, sans-serif;
       -webkit-tap-highlight-color: transparent;
     }
 
     .app {
       min-height: 100dvh;
-      display: grid;
-      grid-template-rows: 50dvh auto 1fr;
+      display: flex;
+      flex-direction: column;
       background: var(--bg);
     }
 
     .camera {
       position: relative;
+      height: 50dvh;
+      min-height: 280px;
       border-bottom: 1px solid var(--line);
-      background: #050505;
       overflow: hidden;
+      background: #050505;
     }
 
     #video {
       width: 100%;
       height: 100%;
-      object-fit: cover;
+      object-fit: contain;
       display: block;
       background: #000000;
     }
@@ -58,33 +62,82 @@
       left: 12px;
       right: 12px;
       bottom: 12px;
-      font-size: 0.95rem;
-      color: var(--muted);
-      background: rgba(0, 0, 0, 0.7);
-      border: 1px solid #404040;
-      border-radius: 10px;
       padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid #3b3b3b;
+      background: rgba(0, 0, 0, 0.7);
+      color: var(--muted);
+      font-size: 0.92rem;
       text-align: center;
+      letter-spacing: 0.05em;
     }
 
     .controls {
       padding: 12px;
       border-bottom: 1px solid var(--line);
       background: var(--panel);
+      display: grid;
+      gap: 12px;
+    }
+
+    .toggle-wrap {
+      display: grid;
+      gap: 8px;
+    }
+
+    .toggle-label {
+      font-size: 0.9rem;
+      color: var(--muted);
+      letter-spacing: 0.13em;
+      font-weight: 700;
+    }
+
+    .toggle-group {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .toggle-option input {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .toggle-option span {
+      display: grid;
+      place-items: center;
+      min-height: 64px;
+      border-radius: 14px;
+      border: 1px solid #4a4a4a;
+      background: #161616;
+      color: #e6e6e6;
+      font-size: 1.1rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      user-select: none;
+      transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+    }
+
+    .toggle-option input:checked + span {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #000000;
     }
 
     #analyzeBtn {
       width: 100%;
-      min-height: 110px;
+      min-height: 112px;
       border: none;
       border-radius: 16px;
-      background: var(--button-bg);
-      color: var(--button-text);
-      font-size: clamp(2rem, 9vw, 3.5rem);
+      background: var(--accent);
+      color: #000000;
+      font-size: clamp(1.8rem, 8.5vw, 3.3rem);
       font-weight: 900;
-      letter-spacing: 0.08em;
+      letter-spacing: 0.09em;
       touch-action: manipulation;
       cursor: pointer;
+      transition: transform 90ms ease, opacity 120ms ease;
     }
 
     #analyzeBtn:active {
@@ -92,37 +145,85 @@
     }
 
     #analyzeBtn:disabled {
-      opacity: 0.45;
+      opacity: 0.55;
       cursor: not-allowed;
+    }
+
+    .results {
+      flex: 1;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      min-height: 0;
     }
 
     .hud {
       display: grid;
-      align-content: center;
-      gap: 22px;
-      padding: 18px 12px 28px;
+      gap: 18px;
+      padding: 18px 12px;
       text-align: center;
+      border-bottom: 1px solid var(--line);
     }
 
     .hud-block {
       display: grid;
-      gap: 8px;
+      gap: 6px;
     }
 
     .hud-label {
-      font-size: clamp(0.95rem, 3.8vw, 1.2rem);
-      letter-spacing: 0.14em;
-      color: var(--muted);
+      font-size: clamp(0.88rem, 3.5vw, 1.1rem);
+      letter-spacing: 0.13em;
       font-weight: 700;
+      color: var(--muted);
     }
 
     .hud-value {
-      font-size: clamp(2.3rem, 12vw, 5.5rem);
+      font-size: clamp(2.1rem, 11.5vw, 5.4rem);
       line-height: 0.95;
       font-weight: 900;
       text-transform: uppercase;
       color: var(--text);
       word-break: break-word;
+    }
+
+    .vision-panel {
+      min-height: 0;
+      padding: 12px;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      gap: 8px;
+      background: #0a0a0a;
+    }
+
+    .vision-title {
+      font-size: 0.9rem;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+      font-weight: 800;
+    }
+
+    #visionConsole {
+      margin: 0;
+      min-height: 150px;
+      max-height: 34dvh;
+      overflow: auto;
+      padding: 10px;
+      border-radius: 10px;
+      border: 1px solid #333333;
+      background: var(--console);
+      color: #eaf8ee;
+      font-size: 0.78rem;
+      line-height: 1.35;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: Consolas, "Courier New", monospace;
+    }
+
+    .ok {
+      color: var(--active);
+    }
+
+    .error {
+      color: var(--danger);
     }
   </style>
 </head>
@@ -134,30 +235,54 @@
     </section>
 
     <section class="controls">
+      <div class="toggle-wrap">
+        <div class="toggle-label">GAME TYPE</div>
+        <div class="toggle-group" role="radiogroup" aria-label="Game Type">
+          <label class="toggle-option">
+            <input type="radio" name="gameType" value="CASH" checked>
+            <span>CASH</span>
+          </label>
+          <label class="toggle-option">
+            <input type="radio" name="gameType" value="TOURNAMENT">
+            <span>TOURNAMENT</span>
+          </label>
+        </div>
+      </div>
       <button id="analyzeBtn" type="button" disabled>ANALYZE</button>
     </section>
 
-    <section class="hud" aria-live="polite">
-      <div class="hud-block">
-        <div class="hud-label">ACTION</div>
-        <div id="action" class="hud-value">WAITING...</div>
-      </div>
-      <div class="hud-block">
-        <div class="hud-label">SIZE</div>
-        <div id="size" class="hud-value">WAITING...</div>
-      </div>
+    <section class="results">
+      <section class="hud" aria-live="polite">
+        <div class="hud-block">
+          <div class="hud-label">ACTION</div>
+          <div id="action" class="hud-value">WAITING...</div>
+        </div>
+        <div class="hud-block">
+          <div class="hud-label">SIZE</div>
+          <div id="size" class="hud-value">WAITING...</div>
+        </div>
+      </section>
+
+      <section class="vision-panel">
+        <div class="vision-title">VISION CONSOLE</div>
+        <pre id="visionConsole">WAITING FOR ANALYSIS OUTPUT...</pre>
+      </section>
     </section>
 
     <canvas id="captureCanvas" hidden></canvas>
   </main>
 
   <script>
+    const MAX_WIDTH = 1280;
+    const JPEG_QUALITY = 0.7;
+
     const video = document.getElementById("video");
     const analyzeBtn = document.getElementById("analyzeBtn");
     const actionEl = document.getElementById("action");
     const sizeEl = document.getElementById("size");
     const cameraStatusEl = document.getElementById("cameraStatus");
     const captureCanvas = document.getElementById("captureCanvas");
+    const visionConsole = document.getElementById("visionConsole");
 
     let stream = null;
 
@@ -166,45 +291,100 @@
       sizeEl.textContent = sizeText;
     }
 
+    function setButtonState(text) {
+      analyzeBtn.textContent = text;
+    }
+
+    function setVisionConsole(value, isError = false) {
+      visionConsole.textContent = value;
+      visionConsole.classList.toggle("error", isError);
+      visionConsole.classList.toggle("ok", !isError);
+    }
+
+    function getSelectedGameType() {
+      const selected = document.querySelector('input[name="gameType"]:checked');
+      return selected ? selected.value : "CASH";
+    }
+
     async function startCamera() {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         cameraStatusEl.textContent = "CAMERA API NOT SUPPORTED";
         setHud("NETWORK ERROR", "NETWORK ERROR");
+        setVisionConsole("Camera API is not supported in this browser.", true);
         return;
       }
 
       try {
+        const videoConstraints = {
+          facingMode: { exact: "environment" },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 }
+        };
+        const supportedConstraints =
+          typeof navigator.mediaDevices.getSupportedConstraints === "function"
+            ? navigator.mediaDevices.getSupportedConstraints()
+            : {};
+        if (supportedConstraints.focusMode) {
+          videoConstraints.advanced = [{ focusMode: "continuous" }];
+        }
+
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "environment" },
+          video: videoConstraints,
           audio: false
         });
+
+        const [videoTrack] = stream.getVideoTracks();
+        if (videoTrack && typeof videoTrack.getCapabilities === "function" && typeof videoTrack.applyConstraints === "function") {
+          const capabilities = videoTrack.getCapabilities();
+          if (Array.isArray(capabilities.focusMode) && capabilities.focusMode.includes("continuous")) {
+            await videoTrack.applyConstraints({
+              advanced: [{ focusMode: "continuous" }]
+            });
+          }
+        }
 
         video.srcObject = stream;
         await video.play();
         cameraStatusEl.textContent = "REAR CAMERA ACTIVE";
         analyzeBtn.disabled = false;
+        setVisionConsole("Camera ready. Tap ANALYZE to process a compressed frame.");
       } catch (error) {
         console.error(error);
         cameraStatusEl.textContent = "CAMERA ACCESS FAILED";
         setHud("NETWORK ERROR", "NETWORK ERROR");
+        setVisionConsole("Camera access failed: " + (error.message || "Unknown error"), true);
       }
     }
 
-    function captureFrameAsJpeg() {
+    function captureCompressedFrameAsJpeg() {
       return new Promise((resolve, reject) => {
-        const w = video.videoWidth;
-        const h = video.videoHeight;
+        const sourceWidth = video.videoWidth;
+        const sourceHeight = video.videoHeight;
 
-        if (!w || !h) {
+        if (!sourceWidth || !sourceHeight) {
           reject(new Error("Video frame unavailable."));
           return;
         }
 
-        captureCanvas.width = w;
-        captureCanvas.height = h;
+        let targetWidth = sourceWidth;
+        let targetHeight = sourceHeight;
+
+        if (sourceWidth > MAX_WIDTH) {
+          const scale = MAX_WIDTH / sourceWidth;
+          targetWidth = MAX_WIDTH;
+          targetHeight = Math.round(sourceHeight * scale);
+        }
+
+        captureCanvas.width = targetWidth;
+        captureCanvas.height = targetHeight;
 
         const ctx = captureCanvas.getContext("2d");
-        ctx.drawImage(video, 0, 0, w, h);
+        if (!ctx) {
+          reject(new Error("Canvas context unavailable."));
+          return;
+        }
+
+        ctx.drawImage(video, 0, 0, targetWidth, targetHeight);
 
         captureCanvas.toBlob((blob) => {
           if (!blob) {
@@ -212,26 +392,32 @@
             return;
           }
           resolve(blob);
-        }, "image/jpeg", 0.9);
+        }, "image/jpeg", JPEG_QUALITY);
       });
     }
 
     async function analyzeFrame() {
       analyzeBtn.disabled = true;
-      setHud("ANALYZING...", "ANALYZING...");
+      setButtonState("CAPTURING...");
 
       try {
-        const imageBlob = await captureFrameAsJpeg();
+        const gameType = getSelectedGameType();
+        const imageBlob = await captureCompressedFrameAsJpeg();
+
         const formData = new FormData();
         formData.append("image", imageBlob, "frame.jpg");
+        formData.append("game_type", gameType);
 
+        setButtonState("UPLOADING...");
         const response = await fetch("/analyze", {
           method: "POST",
           body: formData
         });
 
+        setButtonState("ANALYZING...");
         if (!response.ok) {
-          throw new Error("Server returned " + response.status);
+          const errorText = await response.text();
+          throw new Error("Server " + response.status + ": " + errorText);
         }
 
         const result = await response.json();
@@ -239,11 +425,18 @@
           String(result.action || "WAITING...").toUpperCase(),
           String(result.size || "WAITING...").toUpperCase()
         );
+
+        const statePayload = typeof result.state === "object" && result.state !== null
+          ? result.state
+          : result;
+        setVisionConsole(JSON.stringify(statePayload, null, 2));
       } catch (error) {
         console.error(error);
         setHud("NETWORK ERROR", "NETWORK ERROR");
+        setVisionConsole("NETWORK ERROR\n" + (error.message || "Request failed"), true);
       } finally {
         analyzeBtn.disabled = false;
+        setButtonState("ANALYZE");
       }
     }
 
