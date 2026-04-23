@@ -55,6 +55,58 @@
       object-fit: contain;
       display: block;
       background: #000000;
+      transform-origin: center center;
+      transition: transform 120ms ease;
+    }
+
+    #targetingBox {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 84%;
+      aspect-ratio: 16 / 9;
+      border: 2px solid #00e5ff;
+      box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.35);
+      pointer-events: none;
+      z-index: 3;
+    }
+
+    #targetingBox .corner {
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      border-color: #00e5ff;
+      border-style: solid;
+      border-width: 0;
+    }
+
+    #targetingBox .corner.tl {
+      top: -2px;
+      left: -2px;
+      border-top-width: 4px;
+      border-left-width: 4px;
+    }
+
+    #targetingBox .corner.tr {
+      top: -2px;
+      right: -2px;
+      border-top-width: 4px;
+      border-right-width: 4px;
+    }
+
+    #targetingBox .corner.bl {
+      bottom: -2px;
+      left: -2px;
+      border-bottom-width: 4px;
+      border-left-width: 4px;
+    }
+
+    #targetingBox .corner.br {
+      bottom: -2px;
+      right: -2px;
+      border-bottom-width: 4px;
+      border-right-width: 4px;
     }
 
     .camera-status {
@@ -125,6 +177,31 @@
       color: #000000;
     }
 
+    .zoom-wrap {
+      display: grid;
+      gap: 8px;
+      padding: 10px 10px 12px;
+      border-radius: 12px;
+      border: 1px solid #3b3b3b;
+      background: #141414;
+    }
+
+    .zoom-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.9rem;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    #zoomSlider {
+      width: 100%;
+      accent-color: #00e5ff;
+    }
+
     #analyzeBtn {
       width: 100%;
       min-height: 112px;
@@ -146,6 +223,25 @@
 
     #analyzeBtn:disabled {
       opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    #downloadBtn {
+      width: 100%;
+      min-height: 44px;
+      border-radius: 12px;
+      border: 1px solid #4d4d4d;
+      background: #1a1a1a;
+      color: #e9e9e9;
+      font-size: 0.85rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      touch-action: manipulation;
+      cursor: pointer;
+    }
+
+    #downloadBtn:disabled {
+      opacity: 0.5;
       cursor: not-allowed;
     }
 
@@ -231,10 +327,23 @@
   <main class="app">
     <section class="camera">
       <video id="video" autoplay playsinline muted></video>
+      <div id="targetingBox" aria-hidden="true">
+        <span class="corner tl"></span>
+        <span class="corner tr"></span>
+        <span class="corner bl"></span>
+        <span class="corner br"></span>
+      </div>
       <div id="cameraStatus" class="camera-status">REQUESTING CAMERA...</div>
     </section>
 
     <section class="controls">
+      <div class="zoom-wrap">
+        <label for="zoomSlider" class="zoom-label">
+          <span>Targeting Zoom</span>
+          <span id="zoomValue">1.0x</span>
+        </label>
+        <input type="range" id="zoomSlider" min="1" max="3" step="0.1" value="1">
+      </div>
       <div class="toggle-wrap">
         <div class="toggle-label">GAME TYPE</div>
         <div class="toggle-group" role="radiogroup" aria-label="Game Type">
@@ -249,6 +358,7 @@
         </div>
       </div>
       <button id="analyzeBtn" type="button" disabled>ANALYZE</button>
+      <button id="downloadBtn" type="button" disabled>DOWNLOAD SNAPSHOT</button>
     </section>
 
     <section class="results">
@@ -283,8 +393,15 @@
     const cameraStatusEl = document.getElementById("cameraStatus");
     const captureCanvas = document.getElementById("captureCanvas");
     const visionConsole = document.getElementById("visionConsole");
+    const targetingBox = document.getElementById("targetingBox");
+    const zoomSlider = document.getElementById("zoomSlider");
+    const zoomValueEl = document.getElementById("zoomValue");
+    const downloadBtn = document.getElementById("downloadBtn");
 
     let stream = null;
+    let videoTrack = null;
+    let supportsNativeZoom = false;
+    let cssZoomFactor = 1;
 
     function setHud(actionText, sizeText) {
       actionEl.textContent = actionText;
@@ -301,9 +418,161 @@
       visionConsole.classList.toggle("ok", !isError);
     }
 
+    function updateTargetingBoxSize() {
+      const camera = targetingBox.parentElement;
+      if (!camera) {
+        return;
+      }
+
+      const margin = 24;
+      const maxWidth = Math.max(120, camera.clientWidth - margin);
+      const maxHeight = Math.max(70, camera.clientHeight - margin);
+      let width = Math.min(maxWidth, maxHeight * (16 / 9));
+      let height = width * (9 / 16);
+
+      if (height > maxHeight) {
+        height = maxHeight;
+        width = height * (16 / 9);
+      }
+
+      targetingBox.style.width = `${Math.round(width)}px`;
+      targetingBox.style.height = `${Math.round(height)}px`;
+    }
+
+    function getRenderedVideoRect() {
+      const sourceWidth = video.videoWidth;
+      const sourceHeight = video.videoHeight;
+      const videoRect = video.getBoundingClientRect();
+      if (!sourceWidth || !sourceHeight || !videoRect.width || !videoRect.height) {
+        return null;
+      }
+
+      const sourceAspect = sourceWidth / sourceHeight;
+      const elementAspect = videoRect.width / videoRect.height;
+      let drawWidth;
+      let drawHeight;
+      let offsetX;
+      let offsetY;
+
+      if (elementAspect > sourceAspect) {
+        drawHeight = videoRect.height;
+        drawWidth = drawHeight * sourceAspect;
+        offsetX = (videoRect.width - drawWidth) / 2;
+        offsetY = 0;
+      } else {
+        drawWidth = videoRect.width;
+        drawHeight = drawWidth / sourceAspect;
+        offsetX = 0;
+        offsetY = (videoRect.height - drawHeight) / 2;
+      }
+
+      const scale = cssZoomFactor > 1 ? cssZoomFactor : 1;
+      const centerX = offsetX + (drawWidth / 2);
+      const centerY = offsetY + (drawHeight / 2);
+      const scaledWidth = drawWidth * scale;
+      const scaledHeight = drawHeight * scale;
+
+      return {
+        left: videoRect.left + centerX - (scaledWidth / 2),
+        top: videoRect.top + centerY - (scaledHeight / 2),
+        width: scaledWidth,
+        height: scaledHeight,
+        sourceWidth,
+        sourceHeight
+      };
+    }
+
+    function clamp(value, min, max) {
+      return Math.min(max, Math.max(min, value));
+    }
+
+    function getSmartCropRectFromTargetingBox() {
+      const rendered = getRenderedVideoRect();
+      if (!rendered) {
+        return null;
+      }
+
+      const box = targetingBox.getBoundingClientRect();
+      const cropLeft = Math.max(box.left, rendered.left);
+      const cropTop = Math.max(box.top, rendered.top);
+      const cropRight = Math.min(box.right, rendered.left + rendered.width);
+      const cropBottom = Math.min(box.bottom, rendered.top + rendered.height);
+
+      const cropWidthPx = cropRight - cropLeft;
+      const cropHeightPx = cropBottom - cropTop;
+
+      if (cropWidthPx <= 1 || cropHeightPx <= 1) {
+        return null;
+      }
+
+      const normX = (cropLeft - rendered.left) / rendered.width;
+      const normY = (cropTop - rendered.top) / rendered.height;
+      const normW = cropWidthPx / rendered.width;
+      const normH = cropHeightPx / rendered.height;
+
+      const sx = clamp(Math.round(normX * rendered.sourceWidth), 0, rendered.sourceWidth - 1);
+      const sy = clamp(Math.round(normY * rendered.sourceHeight), 0, rendered.sourceHeight - 1);
+      const sw = clamp(Math.round(normW * rendered.sourceWidth), 1, rendered.sourceWidth - sx);
+      const sh = clamp(Math.round(normH * rendered.sourceHeight), 1, rendered.sourceHeight - sy);
+
+      return { sx, sy, sw, sh };
+    }
+
     function getSelectedGameType() {
       const selected = document.querySelector('input[name="gameType"]:checked');
       return selected ? selected.value : "CASH";
+    }
+
+    async function applyZoom(value) {
+      const zoomValue = clamp(Number(value) || 1, 1, 3);
+      zoomSlider.value = zoomValue.toFixed(1);
+      zoomValueEl.textContent = `${zoomValue.toFixed(1)}x`;
+
+      if (supportsNativeZoom && videoTrack && typeof videoTrack.applyConstraints === "function") {
+        try {
+          await videoTrack.applyConstraints({
+            advanced: [{ zoom: zoomValue }]
+          });
+          cssZoomFactor = 1;
+          video.style.transform = "scale(1)";
+          return;
+        } catch (error) {
+          console.warn("Native zoom failed, using CSS fallback.", error);
+          supportsNativeZoom = false;
+        }
+      }
+
+      cssZoomFactor = zoomValue;
+      video.style.transform = `scale(${zoomValue})`;
+    }
+
+    function configureZoom(track) {
+      supportsNativeZoom = false;
+      cssZoomFactor = 1;
+      video.style.transform = "scale(1)";
+
+      if (!track || typeof track.getCapabilities !== "function") {
+        return;
+      }
+
+      const capabilities = track.getCapabilities();
+      if (!capabilities || typeof capabilities.zoom !== "object") {
+        return;
+      }
+
+      const min = Number.isFinite(capabilities.zoom.min) ? capabilities.zoom.min : 1;
+      const max = Number.isFinite(capabilities.zoom.max) ? capabilities.zoom.max : 3;
+      const step = Number.isFinite(capabilities.zoom.step) && capabilities.zoom.step > 0
+        ? capabilities.zoom.step
+        : 0.1;
+      const clampedMin = clamp(min, 1, 10);
+      const clampedMax = clamp(max, clampedMin, 10);
+
+      zoomSlider.min = String(clampedMin);
+      zoomSlider.max = String(clampedMax);
+      zoomSlider.step = String(step);
+      zoomSlider.value = String(clamp(Number(zoomSlider.value) || 1, clampedMin, clampedMax));
+      supportsNativeZoom = true;
     }
 
     async function startCamera() {
@@ -333,7 +602,8 @@
           audio: false
         });
 
-        const [videoTrack] = stream.getVideoTracks();
+        const [track] = stream.getVideoTracks();
+        videoTrack = track || null;
         if (videoTrack && typeof videoTrack.getCapabilities === "function" && typeof videoTrack.applyConstraints === "function") {
           const capabilities = videoTrack.getCapabilities();
           if (Array.isArray(capabilities.focusMode) && capabilities.focusMode.includes("continuous")) {
@@ -345,8 +615,12 @@
 
         video.srcObject = stream;
         await video.play();
+        configureZoom(videoTrack);
+        await applyZoom(Number(zoomSlider.value));
+        updateTargetingBoxSize();
         cameraStatusEl.textContent = "REAR CAMERA ACTIVE";
         analyzeBtn.disabled = false;
+        downloadBtn.disabled = false;
         setVisionConsole("Camera ready. Tap ANALYZE to process a compressed frame.");
       } catch (error) {
         console.error(error);
@@ -356,7 +630,7 @@
       }
     }
 
-    function captureCompressedFrameAsJpeg() {
+    function captureFrameAsJpeg() {
       return new Promise((resolve, reject) => {
         const sourceWidth = video.videoWidth;
         const sourceHeight = video.videoHeight;
@@ -366,13 +640,19 @@
           return;
         }
 
-        let targetWidth = sourceWidth;
-        let targetHeight = sourceHeight;
+        const smartCrop = getSmartCropRectFromTargetingBox();
+        if (!smartCrop) {
+          reject(new Error("Targeting crop unavailable."));
+          return;
+        }
 
-        if (sourceWidth > MAX_WIDTH) {
-          const scale = MAX_WIDTH / sourceWidth;
+        let targetWidth = smartCrop.sw;
+        let targetHeight = smartCrop.sh;
+
+        if (targetWidth > MAX_WIDTH) {
+          const scale = MAX_WIDTH / targetWidth;
           targetWidth = MAX_WIDTH;
-          targetHeight = Math.round(sourceHeight * scale);
+          targetHeight = Math.max(1, Math.round(targetHeight * scale));
         }
 
         captureCanvas.width = targetWidth;
@@ -384,7 +664,17 @@
           return;
         }
 
-        ctx.drawImage(video, 0, 0, targetWidth, targetHeight);
+        ctx.drawImage(
+          video,
+          smartCrop.sx,
+          smartCrop.sy,
+          smartCrop.sw,
+          smartCrop.sh,
+          0,
+          0,
+          targetWidth,
+          targetHeight
+        );
 
         captureCanvas.toBlob((blob) => {
           if (!blob) {
@@ -402,7 +692,7 @@
 
       try {
         const gameType = getSelectedGameType();
-        const imageBlob = await captureCompressedFrameAsJpeg();
+        const imageBlob = await captureFrameAsJpeg();
 
         const formData = new FormData();
         formData.append("image", imageBlob, "frame.jpg");
@@ -440,7 +730,38 @@
       }
     }
 
+    async function downloadSnapshot() {
+      downloadBtn.disabled = true;
+      const originalText = downloadBtn.textContent;
+      downloadBtn.textContent = "CAPTURING...";
+
+      try {
+        const imageBlob = await captureFrameAsJpeg();
+        const url = URL.createObjectURL(imageBlob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "frame.jpg";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+        setVisionConsole("Snapshot downloaded as frame.jpg.");
+      } catch (error) {
+        console.error(error);
+        setVisionConsole("Snapshot failed: " + (error.message || "Unknown error"), true);
+      } finally {
+        downloadBtn.textContent = originalText;
+        downloadBtn.disabled = false;
+      }
+    }
+
     analyzeBtn.addEventListener("click", analyzeFrame);
+    downloadBtn.addEventListener("click", downloadSnapshot);
+    zoomSlider.addEventListener("input", (event) => {
+      applyZoom(event.target.value).catch((error) => console.warn("Zoom update failed:", error));
+    });
+    window.addEventListener("resize", updateTargetingBoxSize);
+    video.addEventListener("loadedmetadata", updateTargetingBoxSize);
 
     window.addEventListener("beforeunload", () => {
       if (stream) {
