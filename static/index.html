@@ -3,18 +3,22 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>VSAT Decision Support</title>
+  <title>VSAT Tactical HUD</title>
   <style>
     :root {
-      --bg: #000000;
-      --panel: #111111;
-      --line: #2f2f2f;
-      --text: #ffffff;
-      --muted: #bdbdbd;
-      --accent: #ffffff;
-      --active: #15c76f;
-      --danger: #ff4d4d;
-      --console: #070707;
+      --bg-0: #030508;
+      --bg-1: #081018;
+      --panel: #0b121a;
+      --line: #1a2b3c;
+      --line-soft: #163246;
+      --text: #e8f3ff;
+      --muted: #89a9c2;
+      --accent: #00d8ff;
+      --accent-2: #5cff9b;
+      --danger: #ff5f5f;
+      --ok: #6dffbf;
+      --scope-mask: rgba(3, 8, 14, 0.72);
+      --console: #040b12;
     }
 
     * {
@@ -23,86 +27,115 @@
 
     html,
     body {
-      width: 100%;
-      min-height: 100%;
       margin: 0;
       padding: 0;
-      background: var(--bg);
+      width: 100%;
+      min-height: 100%;
+      background:
+        radial-gradient(circle at 20% -10%, #10344d 0%, transparent 35%),
+        radial-gradient(circle at 90% 10%, #0d2a3c 0%, transparent 33%),
+        linear-gradient(180deg, var(--bg-1) 0%, var(--bg-0) 100%);
       color: var(--text);
-      font-family: "Segoe UI", Arial, Helvetica, sans-serif;
+      font-family: "Orbitron", "Segoe UI", Tahoma, sans-serif;
       -webkit-tap-highlight-color: transparent;
     }
 
     .app {
       min-height: 100dvh;
-      display: flex;
-      flex-direction: column;
-      background: var(--bg);
+      display: grid;
+      grid-template-rows: minmax(320px, 54dvh) auto 1fr;
+      background: transparent;
     }
 
     .camera {
       position: relative;
-      height: 50dvh;
-      min-height: 280px;
-      border-bottom: 1px solid var(--line);
       overflow: hidden;
-      background: #050505;
+      border-bottom: 1px solid var(--line);
+      touch-action: none;
+      background: #02060c;
     }
 
     #video {
+      position: absolute;
+      inset: 0;
       width: 100%;
       height: 100%;
-      object-fit: contain;
-      display: block;
-      background: #000000;
+      object-fit: cover;
       transform-origin: center center;
-      transition: transform 120ms ease;
+      will-change: transform;
+      background: #000;
+      filter: contrast(1.07) saturate(1.02);
     }
 
-    #targetingBox {
+    #viewfinder {
       position: absolute;
       left: 50%;
       top: 50%;
       transform: translate(-50%, -50%);
-      width: 84%;
+      width: min(90vw, 82%);
+      max-width: 90vw;
+      max-height: 90%;
       aspect-ratio: 16 / 9;
-      border: 2px solid #00e5ff;
-      box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.35);
+      border: 2px solid var(--accent);
+      box-shadow: 0 0 0 9999px var(--scope-mask);
       pointer-events: none;
-      z-index: 3;
+      z-index: 4;
     }
 
-    #targetingBox .corner {
+    #viewfinder::before,
+    #viewfinder::after {
+      content: "";
       position: absolute;
-      width: 20px;
-      height: 20px;
-      border-color: #00e5ff;
-      border-style: solid;
-      border-width: 0;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
     }
 
-    #targetingBox .corner.tl {
+    #viewfinder::before {
+      width: 32%;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+      opacity: 0.8;
+    }
+
+    #viewfinder::after {
+      width: 1px;
+      height: 32%;
+      background: linear-gradient(180deg, transparent, var(--accent), transparent);
+      opacity: 0.8;
+    }
+
+    #viewfinder .corner {
+      position: absolute;
+      width: 22px;
+      height: 22px;
+      border: 0 solid var(--accent);
+      filter: drop-shadow(0 0 3px rgba(0, 216, 255, 0.6));
+    }
+
+    #viewfinder .tl {
       top: -2px;
       left: -2px;
       border-top-width: 4px;
       border-left-width: 4px;
     }
 
-    #targetingBox .corner.tr {
+    #viewfinder .tr {
       top: -2px;
       right: -2px;
       border-top-width: 4px;
       border-right-width: 4px;
     }
 
-    #targetingBox .corner.bl {
+    #viewfinder .bl {
       bottom: -2px;
       left: -2px;
       border-bottom-width: 4px;
       border-left-width: 4px;
     }
 
-    #targetingBox .corner.br {
+    #viewfinder .br {
       bottom: -2px;
       right: -2px;
       border-bottom-width: 4px;
@@ -111,25 +144,41 @@
 
     .camera-status {
       position: absolute;
-      left: 12px;
-      right: 12px;
-      bottom: 12px;
-      padding: 10px 12px;
+      left: 10px;
+      right: 10px;
+      bottom: 10px;
+      padding: 9px 12px;
       border-radius: 10px;
-      border: 1px solid #3b3b3b;
-      background: rgba(0, 0, 0, 0.7);
+      border: 1px solid #22445d;
+      background: rgba(2, 10, 18, 0.75);
       color: var(--muted);
-      font-size: 0.92rem;
       text-align: center;
-      letter-spacing: 0.05em;
+      font-size: 0.82rem;
+      letter-spacing: 0.08em;
+      z-index: 5;
+      backdrop-filter: blur(4px);
     }
 
     .controls {
-      padding: 12px;
-      border-bottom: 1px solid var(--line);
-      background: var(--panel);
       display: grid;
-      gap: 12px;
+      gap: 10px;
+      padding: 12px;
+      background: linear-gradient(180deg, rgba(10, 18, 28, 0.97), rgba(8, 14, 22, 0.97));
+      border-bottom: 1px solid var(--line);
+    }
+
+    .gesture-hint {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 0.72rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      border: 1px solid var(--line-soft);
+      border-radius: 10px;
+      padding: 8px 10px;
+      background: rgba(8, 18, 29, 0.85);
     }
 
     .toggle-wrap {
@@ -138,16 +187,17 @@
     }
 
     .toggle-label {
-      font-size: 0.9rem;
       color: var(--muted);
-      letter-spacing: 0.13em;
+      letter-spacing: 0.16em;
+      font-size: 0.78rem;
       font-weight: 700;
+      text-transform: uppercase;
     }
 
     .toggle-group {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 10px;
+      gap: 8px;
     }
 
     .toggle-option input {
@@ -157,72 +207,50 @@
     }
 
     .toggle-option span {
+      min-height: 56px;
       display: grid;
       place-items: center;
-      min-height: 64px;
-      border-radius: 14px;
-      border: 1px solid #4a4a4a;
-      background: #161616;
-      color: #e6e6e6;
-      font-size: 1.1rem;
+      border: 1px solid #25445d;
+      border-radius: 12px;
+      background: linear-gradient(180deg, #132737 0%, #0f1f2d 100%);
+      color: #b8d6ec;
+      font-size: 1rem;
       font-weight: 800;
-      letter-spacing: 0.08em;
+      letter-spacing: 0.09em;
+      transition: 120ms ease;
       user-select: none;
-      transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
     }
 
     .toggle-option input:checked + span {
-      background: var(--accent);
-      border-color: var(--accent);
-      color: #000000;
+      color: #001724;
+      border-color: #50e4ff;
+      background: linear-gradient(180deg, #6af1ff 0%, #2ddcff 100%);
     }
 
-    .zoom-wrap {
+    .action-buttons {
       display: grid;
+      grid-template-columns: 1fr;
       gap: 8px;
-      padding: 10px 10px 12px;
-      border-radius: 12px;
-      border: 1px solid #3b3b3b;
-      background: #141414;
-    }
-
-    .zoom-label {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      font-size: 0.9rem;
-      color: var(--muted);
-      letter-spacing: 0.08em;
-      font-weight: 700;
-      text-transform: uppercase;
-    }
-
-    #zoomSlider {
-      width: 100%;
-      accent-color: #00e5ff;
     }
 
     #analyzeBtn {
       width: 100%;
-      min-height: 112px;
-      border: none;
-      border-radius: 16px;
-      background: var(--accent);
-      color: #000000;
-      font-size: clamp(1.8rem, 8.5vw, 3.3rem);
+      min-height: 98px;
+      border: 1px solid #4ef0ff;
+      border-radius: 14px;
+      background:
+        radial-gradient(circle at 30% 20%, #8cf7ff 0%, transparent 50%),
+        linear-gradient(180deg, #17d8ff 0%, #05abd0 100%);
+      color: #03161f;
+      font-size: clamp(1.6rem, 7vw, 2.8rem);
       font-weight: 900;
-      letter-spacing: 0.09em;
-      touch-action: manipulation;
+      letter-spacing: 0.1em;
       cursor: pointer;
-      transition: transform 90ms ease, opacity 120ms ease;
-    }
-
-    #analyzeBtn:active {
-      transform: scale(0.99);
+      touch-action: manipulation;
     }
 
     #analyzeBtn:disabled {
-      opacity: 0.55;
+      opacity: 0.5;
       cursor: not-allowed;
     }
 
@@ -230,34 +258,71 @@
       width: 100%;
       min-height: 44px;
       border-radius: 12px;
-      border: 1px solid #4d4d4d;
-      background: #1a1a1a;
-      color: #e9e9e9;
-      font-size: 0.85rem;
-      font-weight: 800;
+      border: 1px solid #2d4e67;
+      background: linear-gradient(180deg, #15273a 0%, #111f2f 100%);
+      color: #d4ecff;
+      font-weight: 700;
       letter-spacing: 0.08em;
-      touch-action: manipulation;
       cursor: pointer;
+      touch-action: manipulation;
     }
 
     #downloadBtn:disabled {
-      opacity: 0.5;
+      opacity: 0.55;
       cursor: not-allowed;
     }
 
     .results {
-      flex: 1;
       display: grid;
-      grid-template-rows: auto 1fr;
+      grid-template-rows: auto auto 1fr;
       min-height: 0;
+      background: linear-gradient(180deg, rgba(7, 14, 22, 0.95) 0%, rgba(3, 8, 14, 0.98) 100%);
+    }
+
+    .telemetry-wrap {
+      padding: 10px 12px 0;
+    }
+
+    .telemetry-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: var(--muted);
+      font-size: 0.74rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    #uploadProgress {
+      width: 100%;
+      height: 12px;
+      appearance: none;
+      -webkit-appearance: none;
+      border: 1px solid #214257;
+      border-radius: 999px;
+      overflow: hidden;
+      background: #08121d;
+    }
+
+    #uploadProgress::-webkit-progress-bar {
+      background: #08121d;
+    }
+
+    #uploadProgress::-webkit-progress-value {
+      background: linear-gradient(90deg, #00b8ff 0%, #00f4ff 45%, #7affc4 100%);
+    }
+
+    #uploadProgress::-moz-progress-bar {
+      background: linear-gradient(90deg, #00b8ff 0%, #00f4ff 45%, #7affc4 100%);
     }
 
     .hud {
       display: grid;
-      gap: 18px;
-      padding: 18px 12px;
-      text-align: center;
+      gap: 14px;
+      padding: 14px 12px;
       border-bottom: 1px solid var(--line);
+      text-align: center;
     }
 
     .hud-block {
@@ -266,56 +331,57 @@
     }
 
     .hud-label {
-      font-size: clamp(0.88rem, 3.5vw, 1.1rem);
-      letter-spacing: 0.13em;
-      font-weight: 700;
       color: var(--muted);
+      font-size: 0.8rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      font-weight: 700;
     }
 
     .hud-value {
-      font-size: clamp(2.1rem, 11.5vw, 5.4rem);
+      color: var(--text);
+      font-size: clamp(2rem, 10.5vw, 4.9rem);
       line-height: 0.95;
+      letter-spacing: 0.04em;
       font-weight: 900;
       text-transform: uppercase;
-      color: var(--text);
+      text-shadow: 0 0 14px rgba(0, 213, 255, 0.25);
       word-break: break-word;
     }
 
     .vision-panel {
       min-height: 0;
-      padding: 12px;
       display: grid;
       grid-template-rows: auto 1fr;
       gap: 8px;
-      background: #0a0a0a;
+      padding: 12px;
     }
 
     .vision-title {
-      font-size: 0.9rem;
-      letter-spacing: 0.12em;
       color: var(--muted);
-      font-weight: 800;
+      font-size: 0.8rem;
+      letter-spacing: 0.15em;
+      font-weight: 700;
+      text-transform: uppercase;
     }
 
     #visionConsole {
       margin: 0;
-      min-height: 150px;
+      min-height: 140px;
       max-height: 34dvh;
       overflow: auto;
-      padding: 10px;
+      border: 1px solid #1f3547;
       border-radius: 10px;
-      border: 1px solid #333333;
+      padding: 10px;
       background: var(--console);
-      color: #eaf8ee;
-      font-size: 0.78rem;
-      line-height: 1.35;
+      color: #cbeaff;
+      font: 0.76rem/1.35 Consolas, "Courier New", monospace;
       white-space: pre-wrap;
       word-break: break-word;
-      font-family: Consolas, "Courier New", monospace;
     }
 
     .ok {
-      color: var(--active);
+      color: var(--ok);
     }
 
     .error {
@@ -325,9 +391,9 @@
 </head>
 <body>
   <main class="app">
-    <section class="camera">
+    <section id="camera" class="camera">
       <video id="video" autoplay playsinline muted></video>
-      <div id="targetingBox" aria-hidden="true">
+      <div id="viewfinder" aria-hidden="true">
         <span class="corner tl"></span>
         <span class="corner tr"></span>
         <span class="corner bl"></span>
@@ -337,15 +403,13 @@
     </section>
 
     <section class="controls">
-      <div class="zoom-wrap">
-        <label for="zoomSlider" class="zoom-label">
-          <span>Targeting Zoom</span>
-          <span id="zoomValue">1.0x</span>
-        </label>
-        <input type="range" id="zoomSlider" min="1" max="3" step="0.1" value="1">
+      <div class="gesture-hint">
+        <span>1 Finger: Pan</span>
+        <span>2 Fingers: Pinch Zoom</span>
       </div>
+
       <div class="toggle-wrap">
-        <div class="toggle-label">GAME TYPE</div>
+        <div class="toggle-label">Game Type</div>
         <div class="toggle-group" role="radiogroup" aria-label="Game Type">
           <label class="toggle-option">
             <input type="radio" name="gameType" value="CASH" checked>
@@ -353,28 +417,39 @@
           </label>
           <label class="toggle-option">
             <input type="radio" name="gameType" value="TOURNAMENT">
-            <span>TOURNAMENT</span>
+            <span>TOURNEY</span>
           </label>
         </div>
       </div>
-      <button id="analyzeBtn" type="button" disabled>ANALYZE</button>
-      <button id="downloadBtn" type="button" disabled>DOWNLOAD SNAPSHOT</button>
+
+      <div class="action-buttons">
+        <button id="analyzeBtn" type="button" disabled>ANALYZE</button>
+        <button id="downloadBtn" type="button" disabled>DOWNLOAD SNAPSHOT</button>
+      </div>
     </section>
 
     <section class="results">
+      <div class="telemetry-wrap">
+        <div class="telemetry-top">
+          <span>Upload Telemetry</span>
+          <span id="progressText">0%</span>
+        </div>
+        <progress id="uploadProgress" max="100" value="0"></progress>
+      </div>
+
       <section class="hud" aria-live="polite">
         <div class="hud-block">
-          <div class="hud-label">ACTION</div>
+          <div class="hud-label">Action</div>
           <div id="action" class="hud-value">WAITING...</div>
         </div>
         <div class="hud-block">
-          <div class="hud-label">SIZE</div>
+          <div class="hud-label">Size</div>
           <div id="size" class="hud-value">WAITING...</div>
         </div>
       </section>
 
       <section class="vision-panel">
-        <div class="vision-title">VISION CONSOLE</div>
+        <div class="vision-title">Vision Console</div>
         <pre id="visionConsole">WAITING FOR ANALYSIS OUTPUT...</pre>
       </section>
     </section>
@@ -384,32 +459,50 @@
 
   <script>
     const MAX_WIDTH = 1280;
-    const JPEG_QUALITY = 0.7;
+    const JPEG_QUALITY = 0.74;
+    const MIN_ZOOM = 1;
+    const MAX_ZOOM = 4;
 
+    const cameraEl = document.getElementById("camera");
     const video = document.getElementById("video");
+    const viewfinder = document.getElementById("viewfinder");
     const analyzeBtn = document.getElementById("analyzeBtn");
+    const downloadBtn = document.getElementById("downloadBtn");
     const actionEl = document.getElementById("action");
     const sizeEl = document.getElementById("size");
     const cameraStatusEl = document.getElementById("cameraStatus");
     const captureCanvas = document.getElementById("captureCanvas");
     const visionConsole = document.getElementById("visionConsole");
-    const targetingBox = document.getElementById("targetingBox");
-    const zoomSlider = document.getElementById("zoomSlider");
-    const zoomValueEl = document.getElementById("zoomValue");
-    const downloadBtn = document.getElementById("downloadBtn");
+    const uploadProgress = document.getElementById("uploadProgress");
+    const progressText = document.getElementById("progressText");
 
     let stream = null;
-    let videoTrack = null;
-    let supportsNativeZoom = false;
-    let cssZoomFactor = 1;
+    let zoom = 1;
+    let panX = 0;
+    let panY = 0;
+    let gestureMode = "none";
+    let panStartX = 0;
+    let panStartY = 0;
+    let pinchStartDistance = 0;
+    let pinchStartZoom = 1;
+    let pinchStartPanX = 0;
+    let pinchStartPanY = 0;
+    let pinchStartMidX = 0;
+    let pinchStartMidY = 0;
 
     function setHud(actionText, sizeText) {
       actionEl.textContent = actionText;
       sizeEl.textContent = sizeText;
     }
 
-    function setButtonState(text) {
+    function setAnalyzeButtonState(text) {
       analyzeBtn.textContent = text;
+    }
+
+    function setProgress(percent) {
+      const value = Math.max(0, Math.min(100, Math.round(percent)));
+      uploadProgress.value = value;
+      progressText.textContent = `${value}%`;
     }
 
     function setVisionConsole(value, isError = false) {
@@ -418,237 +511,211 @@
       visionConsole.classList.toggle("ok", !isError);
     }
 
-    function updateTargetingBoxSize() {
-      const camera = targetingBox.parentElement;
-      if (!camera) {
-        return;
-      }
-
-      const margin = 24;
-      const maxWidth = Math.max(120, camera.clientWidth - margin);
-      const maxHeight = Math.max(70, camera.clientHeight - margin);
-      let width = Math.min(maxWidth, maxHeight * (16 / 9));
-      let height = width * (9 / 16);
-
-      if (height > maxHeight) {
-        height = maxHeight;
-        width = height * (16 / 9);
-      }
-
-      targetingBox.style.width = `${Math.round(width)}px`;
-      targetingBox.style.height = `${Math.round(height)}px`;
-    }
-
-    function getRenderedVideoRect() {
-      const sourceWidth = video.videoWidth;
-      const sourceHeight = video.videoHeight;
-      const videoRect = video.getBoundingClientRect();
-      if (!sourceWidth || !sourceHeight || !videoRect.width || !videoRect.height) {
-        return null;
-      }
-
-      const sourceAspect = sourceWidth / sourceHeight;
-      const elementAspect = videoRect.width / videoRect.height;
-      let drawWidth;
-      let drawHeight;
-      let offsetX;
-      let offsetY;
-
-      if (elementAspect > sourceAspect) {
-        drawHeight = videoRect.height;
-        drawWidth = drawHeight * sourceAspect;
-        offsetX = (videoRect.width - drawWidth) / 2;
-        offsetY = 0;
-      } else {
-        drawWidth = videoRect.width;
-        drawHeight = drawWidth / sourceAspect;
-        offsetX = 0;
-        offsetY = (videoRect.height - drawHeight) / 2;
-      }
-
-      const scale = cssZoomFactor > 1 ? cssZoomFactor : 1;
-      const centerX = offsetX + (drawWidth / 2);
-      const centerY = offsetY + (drawHeight / 2);
-      const scaledWidth = drawWidth * scale;
-      const scaledHeight = drawHeight * scale;
-
-      return {
-        left: videoRect.left + centerX - (scaledWidth / 2),
-        top: videoRect.top + centerY - (scaledHeight / 2),
-        width: scaledWidth,
-        height: scaledHeight,
-        sourceWidth,
-        sourceHeight
-      };
+    function getSelectedGameType() {
+      const selected = document.querySelector('input[name="gameType"]:checked');
+      return selected ? selected.value : "CASH";
     }
 
     function clamp(value, min, max) {
       return Math.min(max, Math.max(min, value));
     }
 
-    function getSmartCropRectFromTargetingBox() {
-      const rendered = getRenderedVideoRect();
-      if (!rendered) {
+    function getTouchDistance(t0, t1) {
+      const dx = t1.clientX - t0.clientX;
+      const dy = t1.clientY - t0.clientY;
+      return Math.hypot(dx, dy);
+    }
+
+    function getTouchMidpoint(t0, t1) {
+      return {
+        x: (t0.clientX + t1.clientX) / 2,
+        y: (t0.clientY + t1.clientY) / 2
+      };
+    }
+
+    function getBaseVideoRectInContainer() {
+      const cw = cameraEl.clientWidth;
+      const ch = cameraEl.clientHeight;
+      const sw = video.videoWidth;
+      const sh = video.videoHeight;
+
+      if (!cw || !ch || !sw || !sh) {
         return null;
       }
 
-      const box = targetingBox.getBoundingClientRect();
-      const cropLeft = Math.max(box.left, rendered.left);
-      const cropTop = Math.max(box.top, rendered.top);
-      const cropRight = Math.min(box.right, rendered.left + rendered.width);
-      const cropBottom = Math.min(box.bottom, rendered.top + rendered.height);
+      const containerAspect = cw / ch;
+      const sourceAspect = sw / sh;
+      let drawWidth;
+      let drawHeight;
 
-      const cropWidthPx = cropRight - cropLeft;
-      const cropHeightPx = cropBottom - cropTop;
+      if (containerAspect > sourceAspect) {
+        drawWidth = cw;
+        drawHeight = drawWidth / sourceAspect;
+      } else {
+        drawHeight = ch;
+        drawWidth = drawHeight * sourceAspect;
+      }
 
-      if (cropWidthPx <= 1 || cropHeightPx <= 1) {
+      return {
+        width: drawWidth,
+        height: drawHeight,
+        left: (cw - drawWidth) / 2,
+        top: (ch - drawHeight) / 2,
+        sourceWidth: sw,
+        sourceHeight: sh
+      };
+    }
+
+    function clampPan() {
+      const base = getBaseVideoRectInContainer();
+      if (!base) {
+        panX = 0;
+        panY = 0;
+        return;
+      }
+
+      const scaledWidth = base.width * zoom;
+      const scaledHeight = base.height * zoom;
+      const maxPanX = Math.max(0, (scaledWidth - cameraEl.clientWidth) / 2);
+      const maxPanY = Math.max(0, (scaledHeight - cameraEl.clientHeight) / 2);
+
+      panX = clamp(panX, -maxPanX, maxPanX);
+      panY = clamp(panY, -maxPanY, maxPanY);
+    }
+
+    function applyVideoTransform() {
+      clampPan();
+      video.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
+    }
+
+    function onTouchStart(event) {
+      if (event.touches.length === 2) {
+        event.preventDefault();
+        gestureMode = "pinch";
+        pinchStartDistance = getTouchDistance(event.touches[0], event.touches[1]);
+        pinchStartZoom = zoom;
+        pinchStartPanX = panX;
+        pinchStartPanY = panY;
+        const midpoint = getTouchMidpoint(event.touches[0], event.touches[1]);
+        pinchStartMidX = midpoint.x;
+        pinchStartMidY = midpoint.y;
+        return;
+      }
+
+      if (event.touches.length === 1) {
+        event.preventDefault();
+        gestureMode = "pan";
+        panStartX = event.touches[0].clientX - panX;
+        panStartY = event.touches[0].clientY - panY;
+      }
+    }
+
+    function onTouchMove(event) {
+      if (gestureMode === "pinch" && event.touches.length === 2) {
+        event.preventDefault();
+        const distance = getTouchDistance(event.touches[0], event.touches[1]);
+        if (pinchStartDistance > 0) {
+          const factor = distance / pinchStartDistance;
+          zoom = clamp(pinchStartZoom * factor, MIN_ZOOM, MAX_ZOOM);
+        }
+
+        const midpoint = getTouchMidpoint(event.touches[0], event.touches[1]);
+        panX = pinchStartPanX + (midpoint.x - pinchStartMidX);
+        panY = pinchStartPanY + (midpoint.y - pinchStartMidY);
+        applyVideoTransform();
+        return;
+      }
+
+      if (gestureMode === "pan" && event.touches.length === 1) {
+        event.preventDefault();
+        panX = event.touches[0].clientX - panStartX;
+        panY = event.touches[0].clientY - panStartY;
+        applyVideoTransform();
+      }
+    }
+
+    function onTouchEnd(event) {
+      if (event.touches.length === 0) {
+        gestureMode = "none";
+      } else if (event.touches.length === 1) {
+        gestureMode = "pan";
+        panStartX = event.touches[0].clientX - panX;
+        panStartY = event.touches[0].clientY - panY;
+      }
+    }
+
+    function mapContainerPointToSource(x, y) {
+      const base = getBaseVideoRectInContainer();
+      if (!base) {
         return null;
       }
 
-      const normX = (cropLeft - rendered.left) / rendered.width;
-      const normY = (cropTop - rendered.top) / rendered.height;
-      const normW = cropWidthPx / rendered.width;
-      const normH = cropHeightPx / rendered.height;
+      const cx = cameraEl.clientWidth / 2;
+      const cy = cameraEl.clientHeight / 2;
 
-      const sx = clamp(Math.round(normX * rendered.sourceWidth), 0, rendered.sourceWidth - 1);
-      const sy = clamp(Math.round(normY * rendered.sourceHeight), 0, rendered.sourceHeight - 1);
-      const sw = clamp(Math.round(normW * rendered.sourceWidth), 1, rendered.sourceWidth - sx);
-      const sh = clamp(Math.round(normH * rendered.sourceHeight), 1, rendered.sourceHeight - sy);
+      const xAfterTranslation = x - panX;
+      const yAfterTranslation = y - panY;
+      const xBase = cx + (xAfterTranslation - cx) / zoom;
+      const yBase = cy + (yAfterTranslation - cy) / zoom;
 
-      return { sx, sy, sw, sh };
+      const u = (xBase - base.left) / base.width;
+      const v = (yBase - base.top) / base.height;
+
+      return {
+        u,
+        v,
+        sourceWidth: base.sourceWidth,
+        sourceHeight: base.sourceHeight
+      };
     }
 
-    function getSelectedGameType() {
-      const selected = document.querySelector('input[name="gameType"]:checked');
-      return selected ? selected.value : "CASH";
-    }
+    function getSmartCropFromViewfinder() {
+      const cameraRect = cameraEl.getBoundingClientRect();
+      const finderRect = viewfinder.getBoundingClientRect();
 
-    async function applyZoom(value) {
-      const zoomValue = clamp(Number(value) || 1, 1, 3);
-      zoomSlider.value = zoomValue.toFixed(1);
-      zoomValueEl.textContent = `${zoomValue.toFixed(1)}x`;
+      const x0 = finderRect.left - cameraRect.left;
+      const y0 = finderRect.top - cameraRect.top;
+      const x1 = finderRect.right - cameraRect.left;
+      const y1 = finderRect.bottom - cameraRect.top;
 
-      if (supportsNativeZoom && videoTrack && typeof videoTrack.applyConstraints === "function") {
-        try {
-          await videoTrack.applyConstraints({
-            advanced: [{ zoom: zoomValue }]
-          });
-          cssZoomFactor = 1;
-          video.style.transform = "scale(1)";
-          return;
-        } catch (error) {
-          console.warn("Native zoom failed, using CSS fallback.", error);
-          supportsNativeZoom = false;
-        }
+      const topLeft = mapContainerPointToSource(x0, y0);
+      const bottomRight = mapContainerPointToSource(x1, y1);
+      if (!topLeft || !bottomRight) {
+        return null;
       }
 
-      cssZoomFactor = zoomValue;
-      video.style.transform = `scale(${zoomValue})`;
-    }
+      const sourceWidth = topLeft.sourceWidth;
+      const sourceHeight = topLeft.sourceHeight;
 
-    function configureZoom(track) {
-      supportsNativeZoom = false;
-      cssZoomFactor = 1;
-      video.style.transform = "scale(1)";
+      const sx0 = clamp(Math.round(topLeft.u * sourceWidth), 0, sourceWidth - 1);
+      const sy0 = clamp(Math.round(topLeft.v * sourceHeight), 0, sourceHeight - 1);
+      const sx1 = clamp(Math.round(bottomRight.u * sourceWidth), sx0 + 1, sourceWidth);
+      const sy1 = clamp(Math.round(bottomRight.v * sourceHeight), sy0 + 1, sourceHeight);
 
-      if (!track || typeof track.getCapabilities !== "function") {
-        return;
+      const sw = sx1 - sx0;
+      const sh = sy1 - sy0;
+      if (sw < 2 || sh < 2) {
+        return null;
       }
 
-      const capabilities = track.getCapabilities();
-      if (!capabilities || typeof capabilities.zoom !== "object") {
-        return;
-      }
-
-      const min = Number.isFinite(capabilities.zoom.min) ? capabilities.zoom.min : 1;
-      const max = Number.isFinite(capabilities.zoom.max) ? capabilities.zoom.max : 3;
-      const step = Number.isFinite(capabilities.zoom.step) && capabilities.zoom.step > 0
-        ? capabilities.zoom.step
-        : 0.1;
-      const clampedMin = clamp(min, 1, 10);
-      const clampedMax = clamp(max, clampedMin, 10);
-
-      zoomSlider.min = String(clampedMin);
-      zoomSlider.max = String(clampedMax);
-      zoomSlider.step = String(step);
-      zoomSlider.value = String(clamp(Number(zoomSlider.value) || 1, clampedMin, clampedMax));
-      supportsNativeZoom = true;
-    }
-
-    async function startCamera() {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        cameraStatusEl.textContent = "CAMERA API NOT SUPPORTED";
-        setHud("NETWORK ERROR", "NETWORK ERROR");
-        setVisionConsole("Camera API is not supported in this browser.", true);
-        return;
-      }
-
-      try {
-        const videoConstraints = {
-          facingMode: { exact: "environment" },
-          width: { ideal: 1920 },
-          height: { ideal: 1080 }
-        };
-        const supportedConstraints =
-          typeof navigator.mediaDevices.getSupportedConstraints === "function"
-            ? navigator.mediaDevices.getSupportedConstraints()
-            : {};
-        if (supportedConstraints.focusMode) {
-          videoConstraints.advanced = [{ focusMode: "continuous" }];
-        }
-
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: videoConstraints,
-          audio: false
-        });
-
-        const [track] = stream.getVideoTracks();
-        videoTrack = track || null;
-        if (videoTrack && typeof videoTrack.getCapabilities === "function" && typeof videoTrack.applyConstraints === "function") {
-          const capabilities = videoTrack.getCapabilities();
-          if (Array.isArray(capabilities.focusMode) && capabilities.focusMode.includes("continuous")) {
-            await videoTrack.applyConstraints({
-              advanced: [{ focusMode: "continuous" }]
-            });
-          }
-        }
-
-        video.srcObject = stream;
-        await video.play();
-        configureZoom(videoTrack);
-        await applyZoom(Number(zoomSlider.value));
-        updateTargetingBoxSize();
-        cameraStatusEl.textContent = "REAR CAMERA ACTIVE";
-        analyzeBtn.disabled = false;
-        downloadBtn.disabled = false;
-        setVisionConsole("Camera ready. Tap ANALYZE to process a compressed frame.");
-      } catch (error) {
-        console.error(error);
-        cameraStatusEl.textContent = "CAMERA ACCESS FAILED";
-        setHud("NETWORK ERROR", "NETWORK ERROR");
-        setVisionConsole("Camera access failed: " + (error.message || "Unknown error"), true);
-      }
+      return { sx: sx0, sy: sy0, sw, sh };
     }
 
     function captureFrameAsJpeg() {
       return new Promise((resolve, reject) => {
-        const sourceWidth = video.videoWidth;
-        const sourceHeight = video.videoHeight;
-
-        if (!sourceWidth || !sourceHeight) {
+        if (!video.videoWidth || !video.videoHeight) {
           reject(new Error("Video frame unavailable."));
           return;
         }
 
-        const smartCrop = getSmartCropRectFromTargetingBox();
-        if (!smartCrop) {
-          reject(new Error("Targeting crop unavailable."));
+        const crop = getSmartCropFromViewfinder();
+        if (!crop) {
+          reject(new Error("Smart crop unavailable."));
           return;
         }
 
-        let targetWidth = smartCrop.sw;
-        let targetHeight = smartCrop.sh;
-
+        let targetWidth = crop.sw;
+        let targetHeight = crop.sh;
         if (targetWidth > MAX_WIDTH) {
           const scale = MAX_WIDTH / targetWidth;
           targetWidth = MAX_WIDTH;
@@ -666,10 +733,10 @@
 
         ctx.drawImage(
           video,
-          smartCrop.sx,
-          smartCrop.sy,
-          smartCrop.sw,
-          smartCrop.sh,
+          crop.sx,
+          crop.sy,
+          crop.sw,
+          crop.sh,
           0,
           0,
           targetWidth,
@@ -686,48 +753,87 @@
       });
     }
 
-    async function analyzeFrame() {
+    function analyzeFrame() {
       analyzeBtn.disabled = true;
-      setButtonState("CAPTURING...");
+      setAnalyzeButtonState("CAPTURING...");
+      setProgress(0);
 
-      try {
-        const gameType = getSelectedGameType();
-        const imageBlob = await captureFrameAsJpeg();
+      captureFrameAsJpeg()
+        .then((imageBlob) => {
+          const formData = new FormData();
+          formData.append("image", imageBlob, "frame.jpg");
+          formData.append("game_type", getSelectedGameType());
 
-        const formData = new FormData();
-        formData.append("image", imageBlob, "frame.jpg");
-        formData.append("game_type", gameType);
+          return new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open("POST", "/analyze", true);
+            xhr.responseType = "json";
 
-        setButtonState("UPLOADING...");
-        const response = await fetch("/analyze", {
-          method: "POST",
-          body: formData
+            xhr.upload.onprogress = (event) => {
+              if (event.lengthComputable) {
+                const percent = (event.loaded / event.total) * 100;
+                setProgress(percent);
+              } else {
+                setProgress(30);
+              }
+            };
+
+            xhr.onloadstart = () => setAnalyzeButtonState("UPLOADING...");
+            xhr.onreadystatechange = () => {
+              if (xhr.readyState === XMLHttpRequest.HEADERS_RECEIVED) {
+                setAnalyzeButtonState("ANALYZING...");
+              }
+            };
+            xhr.onerror = () => reject(new Error("Network request failed."));
+            xhr.ontimeout = () => reject(new Error("Request timeout."));
+
+            xhr.onload = () => {
+              setProgress(100);
+              if (xhr.status < 200 || xhr.status >= 300) {
+                const text = typeof xhr.responseText === "string" ? xhr.responseText : "Unknown server error";
+                reject(new Error(`Server ${xhr.status}: ${text}`));
+                return;
+              }
+
+              let payload = xhr.response;
+              if (!payload || typeof payload !== "object") {
+                try {
+                  payload = JSON.parse(xhr.responseText);
+                } catch (_err) {
+                  reject(new Error("Invalid JSON response."));
+                  return;
+                }
+              }
+              resolve(payload);
+            };
+
+            xhr.send(formData);
+          });
+        })
+        .then((result) => {
+          setHud(
+            String(result.action || "WAITING...").toUpperCase(),
+            String(result.size || "WAITING...").toUpperCase()
+          );
+
+          const statePayload = typeof result.state === "object" && result.state !== null
+            ? result.state
+            : result;
+          setVisionConsole(JSON.stringify(statePayload, null, 2));
+
+          if (typeof navigator.vibrate === "function") {
+            navigator.vibrate([100, 50, 100]);
+          }
+        })
+        .catch((error) => {
+          console.error(error);
+          setHud("NETWORK ERROR", "NETWORK ERROR");
+          setVisionConsole(`NETWORK ERROR\n${error.message || "Request failed"}`, true);
+        })
+        .finally(() => {
+          analyzeBtn.disabled = false;
+          setAnalyzeButtonState("ANALYZE");
         });
-
-        setButtonState("ANALYZING...");
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error("Server " + response.status + ": " + errorText);
-        }
-
-        const result = await response.json();
-        setHud(
-          String(result.action || "WAITING...").toUpperCase(),
-          String(result.size || "WAITING...").toUpperCase()
-        );
-
-        const statePayload = typeof result.state === "object" && result.state !== null
-          ? result.state
-          : result;
-        setVisionConsole(JSON.stringify(statePayload, null, 2));
-      } catch (error) {
-        console.error(error);
-        setHud("NETWORK ERROR", "NETWORK ERROR");
-        setVisionConsole("NETWORK ERROR\n" + (error.message || "Request failed"), true);
-      } finally {
-        analyzeBtn.disabled = false;
-        setButtonState("ANALYZE");
-      }
     }
 
     async function downloadSnapshot() {
@@ -748,20 +854,62 @@
         setVisionConsole("Snapshot downloaded as frame.jpg.");
       } catch (error) {
         console.error(error);
-        setVisionConsole("Snapshot failed: " + (error.message || "Unknown error"), true);
+        setVisionConsole(`Snapshot failed: ${error.message || "Unknown error"}`, true);
       } finally {
         downloadBtn.textContent = originalText;
         downloadBtn.disabled = false;
       }
     }
 
+    async function startCamera() {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        cameraStatusEl.textContent = "CAMERA API NOT SUPPORTED";
+        setHud("NETWORK ERROR", "NETWORK ERROR");
+        setVisionConsole("Camera API is not supported in this browser.", true);
+        return;
+      }
+
+      try {
+        const constraints = {
+          video: {
+            facingMode: { ideal: "environment" },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 }
+          },
+          audio: false
+        };
+
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
+        video.srcObject = stream;
+        await video.play();
+
+        zoom = 1;
+        panX = 0;
+        panY = 0;
+        applyVideoTransform();
+
+        cameraStatusEl.textContent = "REAR CAMERA ACTIVE";
+        analyzeBtn.disabled = false;
+        downloadBtn.disabled = false;
+        setVisionConsole("Camera ready. Use pinch and drag to align, then tap ANALYZE.");
+      } catch (error) {
+        console.error(error);
+        cameraStatusEl.textContent = "CAMERA ACCESS FAILED";
+        setHud("NETWORK ERROR", "NETWORK ERROR");
+        setVisionConsole(`Camera access failed: ${error.message || "Unknown error"}`, true);
+      }
+    }
+
+    cameraEl.addEventListener("touchstart", onTouchStart, { passive: false });
+    cameraEl.addEventListener("touchmove", onTouchMove, { passive: false });
+    cameraEl.addEventListener("touchend", onTouchEnd, { passive: false });
+    cameraEl.addEventListener("touchcancel", onTouchEnd, { passive: false });
+
     analyzeBtn.addEventListener("click", analyzeFrame);
     downloadBtn.addEventListener("click", downloadSnapshot);
-    zoomSlider.addEventListener("input", (event) => {
-      applyZoom(event.target.value).catch((error) => console.warn("Zoom update failed:", error));
-    });
-    window.addEventListener("resize", updateTargetingBoxSize);
-    video.addEventListener("loadedmetadata", updateTargetingBoxSize);
+
+    window.addEventListener("resize", applyVideoTransform);
+    video.addEventListener("loadedmetadata", applyVideoTransform);
 
     window.addEventListener("beforeunload", () => {
       if (stream) {
